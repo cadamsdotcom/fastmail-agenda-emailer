@@ -1,0 +1,43 @@
+name: Send Daily Agenda
+
+on:
+  schedule:
+    # Runs at 5:00 AM AEST (Australian Eastern Standard Time) = 19:00 UTC previous day
+    # Adjust this to your preferred time. GitHub Actions uses UTC.
+    # Examples:
+    #   5:00 AM US Eastern  = "0 10 * * *"  (UTC-5)
+    #   5:00 AM US Pacific  = "0 13 * * *"  (UTC-8)
+    #   5:00 AM UK          = "0 5 * * *"   (UTC+0)
+    #   5:00 AM AEST        = "0 19 * * *"  (UTC+10, previous day)
+    #   6:00 AM AEDT        = "0 19 * * *"  (UTC+11, previous day)
+    - cron: "0 19 * * *"
+
+  # Allow manual trigger from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  send-agenda:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Send daily agenda email
+        env:
+          FASTMAIL_USERNAME: ${{ secrets.FASTMAIL_USERNAME }}
+          FASTMAIL_APP_PASSWORD: ${{ secrets.FASTMAIL_APP_PASSWORD }}
+          # Optional overrides — only add these secrets if needed:
+          CALDAV_URL: ${{ secrets.CALDAV_URL }}
+          SEND_TO: ${{ secrets.SEND_TO }}
+          CALENDAR_NAMES: ${{ secrets.CALENDAR_NAMES }}
+          DISPLAY_NAME: ${{ secrets.DISPLAY_NAME }}
+        run: python daily_agenda.py
