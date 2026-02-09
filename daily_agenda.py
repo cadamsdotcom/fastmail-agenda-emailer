@@ -195,7 +195,17 @@ def fetch_events(calendars: list, target_date: datetime.date, tz: ZoneInfo, cale
                     dtstart, datetime.datetime
                 )
 
-                if not all_day:
+                if all_day:
+                    # Client-side filter: verify all-day event covers target_date
+                    event_start_date = dtstart  # datetime.date
+                    if dtend:
+                        event_end_date = dtend  # exclusive end, also datetime.date
+                    else:
+                        event_end_date = event_start_date + datetime.timedelta(days=1)
+                    # Skip all-day events that don't actually cover the target date
+                    if not (event_start_date <= target_date < event_end_date):
+                        continue
+                else:
                     if dtstart.tzinfo is None:
                         dtstart = dtstart.replace(tzinfo=tz)
                     dtstart = dtstart.astimezone(tz)
