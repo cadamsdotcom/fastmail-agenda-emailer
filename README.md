@@ -62,17 +62,16 @@ That's it. The workflow runs daily and you'll get an agenda email at your chosen
 ## Run locally
 
 ```bash
-pip install -r requirements.txt
 cp .env.example .env
 # Edit .env with your credentials
-python3 daily_agenda.py --preview    # Test without sending
-python3 daily_agenda.py              # Send the email
+uv run daily_agenda.py --preview    # Test without sending
+uv run daily_agenda.py              # Send the email
 ```
 
 Or schedule with cron:
 
 ```cron
-0 19 * * * cd /path/to/fastmail-daily-agenda && python3 daily_agenda.py
+0 19 * * * cd /path/to/fastmail-daily-agenda && uv run daily_agenda.py
 ```
 
 ## How timezone detection works
@@ -89,7 +88,7 @@ Falls back to UTC if no timezone is found.
 ## CLI options
 
 ```
-python3 daily_agenda.py                      # Send today's agenda
-python3 daily_agenda.py --preview            # Print HTML, don't send
-python3 daily_agenda.py --date 2026-03-15    # Specific date
+uv run daily_agenda.py                      # Send today's agenda
+uv run daily_agenda.py --preview            # Print HTML, don't send
+uv run daily_agenda.py --date 2026-03-15    # Specific date
 ```
