@@ -473,6 +473,13 @@ def main():
     print(f"Fetching events for {today} and {tomorrow}...")
     today_events = fetch_events(calendars, today, tz)
     tomorrow_events = fetch_events(calendars, tomorrow, tz)
+
+    # Filter out today's timed events that have already ended (keep all-day events)
+    now = datetime.datetime.now(tz)
+    today_events = [
+        e for e in today_events
+        if e["all_day"] or (e["end"] or e["start"]) >= now
+    ]
     total = len(today_events) + len(tomorrow_events)
     print(f"Found {len(today_events)} event(s) today, {len(tomorrow_events)} tomorrow ({total} total).")
 
