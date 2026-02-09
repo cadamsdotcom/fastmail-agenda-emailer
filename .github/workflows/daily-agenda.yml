@@ -23,13 +23,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
 
       - name: Send daily agenda email
         env:
@@ -40,4 +35,4 @@ jobs:
           SEND_TO: ${{ secrets.SEND_TO }}
           CALENDAR_NAMES: ${{ secrets.CALENDAR_NAMES }}
           DISPLAY_NAME: ${{ secrets.DISPLAY_NAME }}
-        run: python daily_agenda.py
+        run: uv run daily_agenda.py
