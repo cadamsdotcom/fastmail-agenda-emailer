@@ -2,15 +2,9 @@ name: Send Daily Agenda
 
 on:
   schedule:
-    # Runs at 5:00 AM AEST (Australian Eastern Standard Time) = 19:00 UTC previous day
-    # Adjust this to your preferred time. GitHub Actions uses UTC.
-    # Examples:
-    #   5:00 AM US Eastern  = "0 10 * * *"  (UTC-5)
-    #   5:00 AM US Pacific  = "0 13 * * *"  (UTC-8)
-    #   5:00 AM UK          = "0 5 * * *"   (UTC+0)
-    #   5:00 AM AEST        = "0 19 * * *"  (UTC+10, previous day)
-    #   6:00 AM AEDT        = "0 19 * * *"  (UTC+11, previous day)
-    - cron: "0 19 * * *"
+    # Two cron times to cover both AEST and AEDT — a guard step skips the wrong one
+    - cron: "0 18 * * *"  # 5am AEDT (UTC+11, summer)
+    - cron: "0 19 * * *"  # 5am AEST (UTC+10, winter)
 
   # Allow manual trigger from the Actions tab
   workflow_dispatch:
@@ -20,6 +14,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Check if 5am local time
+        if: github.event_name == 'schedule'
+        run: |
+          HOUR=$(TZ="Australia/Sydney" date +%H)
+          if [ "$HOUR" != "05" ]; then
+            echo "Current hour in Sydney is $HOUR, not 05. Skipping."
+            exit 1
+          fi
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
