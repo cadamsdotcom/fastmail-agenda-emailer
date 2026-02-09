@@ -74,15 +74,13 @@ def get_config() -> dict:
         print("\nSee .env.example for details.")
         sys.exit(1)
 
-    config["CALDAV_URL"] = os.environ.get(
-        "CALDAV_URL",
+    config["CALDAV_URL"] = os.environ.get("CALDAV_URL") or \
         f"https://caldav.fastmail.com/dav/calendars/user/{config['FASTMAIL_USERNAME']}/"
-    )
-    config["SMTP_HOST"] = os.environ.get("SMTP_HOST", "smtp.fastmail.com")
-    config["SMTP_PORT"] = int(os.environ.get("SMTP_PORT", "465"))
-    config["SEND_TO"] = os.environ.get("SEND_TO", config["FASTMAIL_USERNAME"])
-    config["CALENDAR_NAMES"] = os.environ.get("CALENDAR_NAMES", "")
-    config["DISPLAY_NAME"] = os.environ.get("DISPLAY_NAME", "")
+    config["SMTP_HOST"] = os.environ.get("SMTP_HOST") or "smtp.fastmail.com"
+    config["SMTP_PORT"] = int(os.environ.get("SMTP_PORT") or "465")
+    config["SEND_TO"] = os.environ.get("SEND_TO") or config["FASTMAIL_USERNAME"]
+    config["CALENDAR_NAMES"] = os.environ.get("CALENDAR_NAMES") or ""
+    config["DISPLAY_NAME"] = os.environ.get("DISPLAY_NAME") or ""
 
     return config
 
