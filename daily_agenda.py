@@ -28,6 +28,7 @@ from zoneinfo import ZoneInfo
 
 import caldav
 import caldav.elements.cdav as cdav
+from caldav.elements.ical import CalendarColor
 
 
 # ---------------------------------------------------------------------------
@@ -89,8 +90,30 @@ def get_config() -> dict:
 # Calendar
 # ---------------------------------------------------------------------------
 
-def connect_calendars(config: dict) -> list:
-    """Connect to Fastmail CalDAV and return the list of calendars."""
+def get_calendar_colors(calendars: list) -> dict:
+    """Query each calendar for its configured color. Returns {name: "#RRGGBB"}."""
+    default_color = "#4285f4"
+    colors = {}
+    for cal in calendars:
+        name = cal.name or "(unnamed)"
+        try:
+            props = cal.get_properties([CalendarColor()])
+            raw = props.get(CalendarColor.tag, "")
+            raw = str(raw).strip()
+            if raw.startswith("#") and len(raw) == 9:
+                # Strip alpha channel from #RRGGBBAA format
+                raw = raw[:7]
+            if raw.startswith("#") and len(raw) == 7:
+                colors[name] = raw
+            else:
+                colors[name] = default_color
+        except Exception:
+            colors[name] = default_color
+    return colors
+
+
+def connect_calendars(config: dict) -> tuple[list, dict]:
+    """Connect to Fastmail CalDAV and return (calendars, calendar_colors)."""
     client = caldav.DAVClient(
         url=config["CALDAV_URL"],
         username=config["FASTMAIL_USERNAME"],
@@ -106,7 +129,9 @@ def connect_calendars(config: dict) -> list:
     if wanted:
         calendars = [c for c in calendars if (c.name or "").lower() in wanted]
 
-    return calendars
+    calendar_colors = get_calendar_colors(calendars)
+
+    return calendars, calendar_colors
 
 
 def detect_calendar_timezone(calendars: list) -> str:
@@ -130,17 +155,20 @@ def detect_calendar_timezone(calendars: list) -> str:
     return "UTC"
 
 
-def fetch_events(calendars: list, target_date: datetime.date, tz: ZoneInfo) -> list[dict]:
+def fetch_events(calendars: list, target_date: datetime.date, tz: ZoneInfo, calendar_colors: dict | None = None) -> list[dict]:
     """Fetch events for the target date from the given calendars."""
     day_start = datetime.datetime.combine(target_date, datetime.time.min, tzinfo=tz)
     day_end = datetime.datetime.combine(
         target_date + datetime.timedelta(days=1), datetime.time.min, tzinfo=tz
     )
 
+    default_color = "#4285f4"
+    colors = calendar_colors or {}
     events = []
 
     for cal in calendars:
         cal_name = cal.name or "(unnamed)"
+        cal_color = colors.get(cal_name, default_color)
 
         try:
             results = cal.search(start=day_start, end=day_end, event=True, expand=True)
@@ -150,40 +178,42 @@ def fetch_events(calendars: list, target_date: datetime.date, tz: ZoneInfo) -> l
 
         for item in results:
             try:
-                vevent = item.vobject_instance.vevent
+                cal_data = item.icalendar_instance
             except AttributeError:
                 continue
 
-            summary = str(getattr(vevent, "summary", None) or "Untitled event")
-            location = str(getattr(vevent, "location", None) or "")
-            description = str(getattr(vevent, "description", None) or "")
+            for vevent in cal_data.walk("VEVENT"):
+                summary = str(vevent.get("SUMMARY") or "Untitled event")
+                location = str(vevent.get("LOCATION") or "")
+                description = str(vevent.get("DESCRIPTION") or "")
 
-            dtstart = vevent.dtstart.value
-            dtend = getattr(vevent, "dtend", None)
-            dtend = dtend.value if dtend else None
+                dtstart = vevent["DTSTART"].dt
+                dtend_prop = vevent.get("DTEND")
+                dtend = dtend_prop.dt if dtend_prop else None
 
-            all_day = isinstance(dtstart, datetime.date) and not isinstance(
-                dtstart, datetime.datetime
-            )
+                all_day = isinstance(dtstart, datetime.date) and not isinstance(
+                    dtstart, datetime.datetime
+                )
 
-            if not all_day:
-                if dtstart.tzinfo is None:
-                    dtstart = dtstart.replace(tzinfo=tz)
-                dtstart = dtstart.astimezone(tz)
-                if dtend:
-                    if dtend.tzinfo is None:
-                        dtend = dtend.replace(tzinfo=tz)
-                    dtend = dtend.astimezone(tz)
+                if not all_day:
+                    if dtstart.tzinfo is None:
+                        dtstart = dtstart.replace(tzinfo=tz)
+                    dtstart = dtstart.astimezone(tz)
+                    if dtend:
+                        if dtend.tzinfo is None:
+                            dtend = dtend.replace(tzinfo=tz)
+                        dtend = dtend.astimezone(tz)
 
-            events.append({
-                "summary": summary,
-                "location": location,
-                "description": description,
-                "start": dtstart,
-                "end": dtend,
-                "all_day": all_day,
-                "calendar": cal_name,
-            })
+                events.append({
+                    "summary": summary,
+                    "location": location,
+                    "description": description,
+                    "start": dtstart,
+                    "end": dtend,
+                    "all_day": all_day,
+                    "calendar": cal_name,
+                    "color": cal_color,
+                })
 
     events.sort(key=lambda e: (
         0 if e["all_day"] else 1,
@@ -233,7 +263,7 @@ def render_event_row(e: dict, target_date: datetime.date) -> str:
         </td>"""
 
     # --- Color bar (between time and detail) ---
-    bar_color = "#34a853" if e["all_day"] else "#4285f4"
+    bar_color = e.get("color", "#4285f4")
     bar_cell = f"""
     <td style="padding: 0; width: 4px; vertical-align: top;">
         <div style="width: 4px; background: {bar_color}; border-radius: 2px; min-height: 40px; height: 100%;"></div>
@@ -243,7 +273,7 @@ def render_event_row(e: dict, target_date: datetime.date) -> str:
     parts = []
 
     # Summary
-    summary_color = "#1a73e8" if not e["all_day"] else "#188038"
+    summary_color = e.get("color", "#4285f4")
     parts.append(
         f'<div style="font-size: 14px; color: {summary_color}; font-weight: 500;">{esc(e["summary"])}</div>'
     )
@@ -456,7 +486,7 @@ def main():
     config = get_config()
 
     print("Connecting to Fastmail CalDAV...")
-    calendars = connect_calendars(config)
+    calendars, calendar_colors = connect_calendars(config)
     timezone_name = detect_calendar_timezone(calendars)
     tz = ZoneInfo(timezone_name)
     print(f"Detected calendar timezone: {timezone_name}")
@@ -469,8 +499,8 @@ def main():
     tomorrow = today + datetime.timedelta(days=1)
 
     print(f"Fetching events for {today} and {tomorrow}...")
-    today_events = fetch_events(calendars, today, tz)
-    tomorrow_events = fetch_events(calendars, tomorrow, tz)
+    today_events = fetch_events(calendars, today, tz, calendar_colors)
+    tomorrow_events = fetch_events(calendars, tomorrow, tz, calendar_colors)
 
     # Filter out today's timed events that have already ended (keep all-day events)
     now = datetime.datetime.now(tz)
