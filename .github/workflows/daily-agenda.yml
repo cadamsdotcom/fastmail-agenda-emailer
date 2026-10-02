@@ -4,7 +4,7 @@ on:
   schedule:
     # Two cron times to cover both AEST and AEDT — a guard step skips the wrong one
     - cron: "0 18 * * *"  # 5am AEDT (UTC+11, summer)
-    - cron: "0 19 * * *"  # 5am AEST (UTC+10, winter)
+    - cron: "0 19-23 * * *"  # 5-9am AEST (UTC+10, winter)
 
   # Allow manual trigger from the Actions tab
   workflow_dispatch:
