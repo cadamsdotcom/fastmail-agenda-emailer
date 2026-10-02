@@ -14,22 +14,34 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check if 5am local time
+      # Decide based on which cron fired rather than the current hour, since
+      # GitHub can delay scheduled runs by an hour or more. The cron strings
+      # below must match the schedule entries above exactly.
+      - name: Check this cron matches Sydney's current UTC offset
+        id: guard
         if: github.event_name == 'schedule'
         run: |
-          HOUR=$(TZ="Australia/Sydney" date +%H)
-          if [ "$HOUR" != "05" ]; then
-            echo "Current hour in Sydney is $HOUR, not 05. Skipping."
-            exit 1
+          OFFSET=$(TZ="Australia/Sydney" date +%z)
+          case "${{ github.event.schedule }}" in
+            "0 18 * * *") WANT="+1100" ;;
+            "0 19 * * *") WANT="+1000" ;;
+            *) WANT="unknown" ;;
+          esac
+          if [ "$OFFSET" != "$WANT" ]; then
+            echo "Sydney offset is $OFFSET but this cron is for $WANT. Skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Checkout repository
+        if: steps.guard.outputs.skip != 'true'
         uses: actions/checkout@v4
 
       - name: Install uv
+        if: steps.guard.outputs.skip != 'true'
         uses: astral-sh/setup-uv@v5
 
       - name: Send daily agenda email
+        if: steps.guard.outputs.skip != 'true'
         env:
           FASTMAIL_USERNAME: ${{ secrets.FASTMAIL_USERNAME }}
           FASTMAIL_APP_PASSWORD: ${{ secrets.FASTMAIL_APP_PASSWORD }}
